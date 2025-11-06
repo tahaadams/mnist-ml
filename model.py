@@ -237,26 +237,26 @@ def binary_classification():
     mnist_binary_train.plot_image(mnist_binary_train_result[3])
 
     # # (d)
+    misclassified = []
+    mis_info = []
+    for i in range(mnist_binary_test.get_size()):
+        x = mnist_binary_test.xs[i]
+        y = mnist_binary_test.ys[i]
+        pred = mnist_binary_model.predict(x)
+        if pred != y:
+            prob = mnist_binary_model.hypothesis(x)
+            flat = [pixel for row in x for pixel in row]
+            misclassified.append(flat)
+            mis_info.append((i, y, pred, prob))
+        if len(misclassified) >= 10:
+            break
 
-    mnist_binary_train.plot_image(mnist_binary_train.get_sample()[0])
-    mnist_binary_train.index += 100
-    mnist_binary_train.plot_image(mnist_binary_train.get_sample()[0])
-    mnist_binary_train.index += 100
-    mnist_binary_train.plot_image(mnist_binary_train.get_sample()[0])
-    mnist_binary_train.index += 100
-    mnist_binary_train.plot_image(mnist_binary_train.get_sample()[0])
-    mnist_binary_train.index += 100
-    mnist_binary_train.plot_image(mnist_binary_train.get_sample()[0])
-    mnist_binary_train.index += 100
-    mnist_binary_train.plot_image(mnist_binary_train.get_sample()[0])
-    mnist_binary_train.index += 100
-    mnist_binary_train.plot_image(mnist_binary_train.get_sample()[0])
-    mnist_binary_train.index += 100
-    mnist_binary_train.plot_image(mnist_binary_train.get_sample()[0])
-    mnist_binary_train.index += 100
-    mnist_binary_train.plot_image(mnist_binary_train.get_sample()[0])
-    mnist_binary_train.index += 100
-    mnist_binary_train.plot_image(mnist_binary_train.get_sample()[0])
+    if len(misclassified) == 0:
+        print("No misclassified examples found in the test set.")
+    else:
+        for idx, (i, actual, pred, prob) in enumerate(mis_info):
+            print(f"Error {idx+1}: index={i}, actual={actual}, predicted={pred}, prob={prob:.4f}")
+            mnist_binary_test.plot_image(misclassified[idx])
 
     # 8. Extra credit
     ex4q7i = util.get_dataset("ex4q7i")
