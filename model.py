@@ -76,19 +76,25 @@ class PolynomialRegressionModel(Model):
         losses = []
         testLosses = []
         alpha = self.learning_rate/(2 * dataset.get_size())
+        max_weight = 1e6
 
         while k < nIterations:
             randomSample = dataset.get_sample()
 
             eval_iters.append(k)
             losses.append(dataset.compute_average_loss(self))
-            testLosses.append(evalset.compute_average_loss(self))
+            if evalset is not None:
+                testLosses.append(evalset.compute_average_loss(self))
 
             featuresX = self.get_features(randomSample[0])
   
             for j in range(self.degree + 1):
                 updateValue = alpha * 2 * dataset.get_size() * (self.hypothesis(randomSample[0]) - randomSample[1])
                 self.weights[j] = self.weights[j] - (updateValue * featuresX[j])
+                if self.weights[j] > max_weight:
+                    self.weights[j] = max_weight
+                elif self.weights[j] < -max_weight:
+                    self.weights[j] = -max_weight
 
             k += 1
         
@@ -109,37 +115,32 @@ def linear_regression():
 
     sine_train_result = sine_model.train(sine_train, sine_test)
 
-    print('average loss of sine_train', sine_train.compute_average_loss(sine_model))
+    print('average loss of sine_train:', sine_train.compute_average_loss(sine_model))
     sine_train.plot_data(sine_model)
 
     # (b)
     sine_train.plot_loss_curve(sine_train_result[0], sine_train_result[1])
 
     # (c)
-    # mix and match 10 times, (maybe do a for loop) and compute average loss
-    sine_val = util.get_dataset("sine_val")
-    sine_model0 = PolynomialRegressionModel(1, 1e-4/2)
-    print('average loss of sine_model0', sine_val.compute_average_loss(sine_model0))
-    sine_model1 = PolynomialRegressionModel(1, 1e-4/3)
-    print('average loss of sine_model1', sine_val.compute_average_loss(sine_model1))
-    sine_model2 = PolynomialRegressionModel(1, 1e-4/4)
-    print('average loss of sine_model2', sine_val.compute_average_loss(sine_model2))
-    sine_model3 = PolynomialRegressionModel(1, 1e-5)
-    print('average loss of sine_model3', sine_val.compute_average_loss(sine_model3))
-    sine_model4 = PolynomialRegressionModel(1, 1e-5/2)
-    print('average loss of sine_model4', sine_val.compute_average_loss(sine_model4))
-    sine_model5 = PolynomialRegressionModel(1, 1e-5/3)
-    print('average loss of sine_model5', sine_val.compute_average_loss(sine_model5))
-    sine_model6 = PolynomialRegressionModel(1, 1e-6)
-    print('average loss of sine_model6', sine_val.compute_average_loss(sine_model6))
-    sine_model7 = PolynomialRegressionModel(1, 1e-6/2)
-    print('average loss of sine_model7', sine_val.compute_average_loss(sine_model7))
-    sine_model8 = PolynomialRegressionModel(1, 1e-7)
-    print('average loss of sine_model8', sine_val.compute_average_loss(sine_model8))
-    sine_model9 = PolynomialRegressionModel(1, 1e-7/2)
-    print('average loss of sine_model9', sine_val.compute_average_loss(sine_model9))
+    degrees = [1, 2, 3, 4]
+    learning_rates = [1e-3, 5e-4, 1e-4, 5e-5, 1e-5]
 
-    print('model 8 has the best results from degree 1, learning rate 1e-7.')
+    sine_val = util.get_dataset("sine_val")
+    results = []
+
+    for degree in degrees:
+        for lr in learning_rates:
+            model = PolynomialRegressionModel(degree, lr)
+            model.train(sine_train)
+
+            train_loss = sine_train.compute_average_loss(model)
+            val_loss = sine_val.compute_average_loss(model)
+
+            results.append((degree, lr, train_loss, val_loss))
+            
+    best = min(results, key=lambda x: x[3])
+
+    print('best combination:', f"degree={best[0]}, lr={best[1]:.0e}, train_loss={best[2]:.4f}, val_loss={best[3]:.4f}")
 
 # PA4 Q3
 class BinaryLogisticRegressionModel(Model):
@@ -230,33 +231,29 @@ def binary_classification():
     mnist_binary_train.plot_accuracy_curve(mnist_binary_train_result[0], mnist_binary_train_result[1])
     mnist_binary_test.plot_accuracy_curve(mnist_binary_train_result[0], mnist_binary_train_result[2])
     
-    # # (b)
+    # (b)
     mnist_binary_train.plot_confusion_matrix(mnist_binary_model)
 
-    # # (c)
+    # (c)
     mnist_binary_train.plot_image(mnist_binary_train_result[3])
 
-    # # (d)
+    # (d)
     misclassified = []
-    mis_info = []
+
     for i in range(mnist_binary_test.get_size()):
         x = mnist_binary_test.xs[i]
         y = mnist_binary_test.ys[i]
+
         pred = mnist_binary_model.predict(x)
+
         if pred != y:
-            prob = mnist_binary_model.hypothesis(x)
             flat = [pixel for row in x for pixel in row]
             misclassified.append(flat)
-            mis_info.append((i, y, pred, prob))
-        if len(misclassified) >= 10:
-            break
-
-    if len(misclassified) == 0:
-        print("No misclassified examples found in the test set.")
-    else:
-        for idx, (i, actual, pred, prob) in enumerate(mis_info):
-            print(f"Error {idx+1}: index={i}, actual={actual}, predicted={pred}, prob={prob:.4f}")
-            mnist_binary_test.plot_image(misclassified[idx])
+            if len(misclassified) >= 10:
+                break
+    
+    for error in misclassified:
+        mnist_binary_test.plot_image(error)
 
     # 8. Extra credit
     ex4q7i = util.get_dataset("ex4q7i")
