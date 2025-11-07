@@ -194,6 +194,8 @@ class BinaryLogisticRegressionModel(Model):
         alpha = self.learning_rate/(2 * dataset.get_size())
 
         while k < nIterations:
+            if k % 100 == 0:
+                print(f'blr iteration: {k}/{nIterations}')
             randomSample = dataset.get_sample()
 
             if k % 20 == 0:
@@ -255,32 +257,6 @@ def binary_classification():
     for error in misclassified:
         mnist_binary_test.plot_image(error)
 
-    # 8. Extra credit
-    ex4q7i = util.get_dataset("ex4q7i")
-    ex4q7ii = util.get_dataset("ex4q7ii")
-    ex4q7iii = util.get_dataset("ex4q7iii")
-    ex4q7iv = util.get_dataset("ex4q7iv")
-    ex4q7_model = BinaryLogisticRegressionModel(28**2)
-
-    ex4q7i_result = ex4q7_model.train(ex4q7i, mnist_binary_test)
-    ex4q7ii_result = ex4q7_model.train(ex4q7ii, mnist_binary_test)
-    ex4q7iii_result = ex4q7_model.train(ex4q7iii, mnist_binary_test)
-    ex4q7iv_result = ex4q7_model.train(ex4q7iv, mnist_binary_test)
-
-    ex4q7i.compute_average_accuracy(ex4q7_model)
-    ex4q7i.plot_confusion_matrix(ex4q7_model)
-    ex4q7ii.compute_average_accuracy(ex4q7_model)
-    ex4q7ii.plot_confusion_matrix(ex4q7_model)
-    ex4q7iii.compute_average_accuracy(ex4q7_model)
-    ex4q7iii.plot_confusion_matrix(ex4q7_model)
-    ex4q7iv.compute_average_accuracy(ex4q7_model)
-    ex4q7iv.plot_confusion_matrix(ex4q7_model)
-
-    ex4q7i.plot_image(ex4q7i_result[3])
-    ex4q7ii.plot_image(ex4q7ii_result[3])
-    ex4q7iii.plot_image(ex4q7iii_result[3])
-    ex4q7iv.plot_image(ex4q7iv_result[3])
-
 
 # PA4 Q5
 class MultiLogisticRegressionModel(Model):
@@ -305,28 +281,20 @@ class MultiLogisticRegressionModel(Model):
         return self.weights
 
     def hypothesis(self, x):
-        classHypothesis = []
         features = self.get_features(x)
-        mainSum = 0
-
-        for k in range(self.num_classes):
-            classSum = 0
-
-            for j in range(self.num_features + 1):
-                classSum = classSum + (self.weights[k][j] * features[j])
-
-            mainSum = mainSum + math.exp(classSum)
         
+        logits = []
         for k in range(self.num_classes):
-            sum = 0
-
-            for j in range(self.num_features + 1):
-                sum = sum + (self.weights[k][j] * features[j])
-            
-            classValue = math.exp(sum) / mainSum
-            classHypothesis.append(classValue)
-
-        return classHypothesis
+            logit = sum(self.weights[k][j] * features[j] for j in range(self.num_features + 1))
+            logits.append(logit)
+        
+        max_logit = max(logits)
+        exp_logits = [math.exp(logit - max_logit) for logit in logits]
+        
+        sum_exp = sum(exp_logits)
+        probabilities = [exp_val / sum_exp for exp_val in exp_logits]
+        
+        return probabilities
 
     def predict(self, x):
         predictions = self.hypothesis(x)
@@ -353,13 +321,17 @@ class MultiLogisticRegressionModel(Model):
 
         return sum - math.log(mainSum)
 
-    def gradient(self, x, y, k):
-        featuresX = self.get_features(x)
-        sum = 0
-        for i in range(self.num_features + 1):
-            sum = sum + ((self.indicator(y, k) - self.hypothesis(x)[k]) * featuresX[i])
+    def gradient(self, x, y, probs=None):
+        features = self.get_features(x)
+        if probs is None:
+            probs = self.hypothesis(x)
         
-        return sum
+        gradients = []
+        for k in range(self.num_classes):
+            grad = (self.indicator(y, k) - probs[k])
+            gradients.append([grad * feat for feat in features])
+
+        return gradients
         
     def indicator(self, y, k):
         if y == k:
@@ -373,26 +345,43 @@ class MultiLogisticRegressionModel(Model):
         eval_iters = []
         accuracies = []
         testAccuracies = []
-        alpha = self.learning_rate/(2 * dataset.get_size())
+        alpha = self.learning_rate
+        batch_size = 32
+        max_weight = 10.0
 
         while k < nIterations:
-            print('iteration:', k)
-            randomSample = dataset.get_sample()
-
-            if k % 20 == 0:
-                eval_iters.append(k)
-                accuracies.append(dataset.compute_average_accuracy(self, 20))
-                testAccuracies.append(evalset.compute_average_accuracy(self, 20))
+            if k % 100 == 0:
+                print(f'mlr iteration {k}/{nIterations}')
+            
+            batch_gradients = [[0 for _ in range(self.num_features + 1)] for _ in range(self.num_classes)]
+            
+            for _ in range(batch_size):
+                sample = dataset.get_sample()
+                probs = self.hypothesis(sample[0])
+                sample_grads = self.gradient(sample[0], sample[1], probs)
+                
+                for c in range(self.num_classes):
+                    for j in range(self.num_features + 1):
+                        batch_gradients[c][j] += sample_grads[c][j]
 
             for c in range(self.num_classes):
                 for j in range(self.num_features + 1):
-                    updateValue = alpha * 2 * dataset.get_size() * self.gradient(randomSample[0], randomSample[1], c)
-                    self.weights[c][j] = self.weights[c][j] - updateValue
+                    update = alpha * batch_gradients[c][j] / batch_size
+                    self.weights[c][j] = max(min(
+                        self.weights[c][j] + update, 
+                        max_weight
+                    ), -max_weight)
+
+            if k % 50 == 0:
+                eval_iters.append(k)
+                accuracies.append(dataset.compute_average_accuracy(self, 50))
+                if evalset is not None:
+                    testAccuracies.append(evalset.compute_average_accuracy(self, 50))
 
             k += 1
         
-        return [eval_iters, accuracies, testAccuracies, self.weights[1:]]
-
+        feature_weights = [[w for w in class_weights[1:]] for class_weights in self.weights]
+        return [eval_iters, accuracies, testAccuracies, feature_weights]
 
 # PA4 Q6
 def multi_classification():
@@ -401,27 +390,27 @@ def multi_classification():
     # util.Dataset.compute_average_accuracy, util.MNISTDataset.plot_accuracy_curve
     # util.MNISTDataset.plot_confusion_matrix
     # util.MNISTDataset.plot_image
-
-    "*** YOUR CODE HERE ***"
     
-    # (a)
     mnist_train = util.get_dataset("mnist_train")
-    mnist_train.xs = mnist_train.xs[:10]
-    mnist_train.ys = mnist_train.ys[:10]
     mnist_test = util.get_dataset("mnist_test")
-    mnist_model = MultiLogisticRegressionModel(28**2, 10)
-
-    mnist_train_result = mnist_model.train(mnist_test)
-
-    mnist_test.compute_average_accuracy(mnist_model)
-    mnist_test.plot_accuracy_curve(mnist_train_result[0], mnist_train_result[1])
-    mnist_test.plot_accuracy_curve(mnist_train_result[0], mnist_train_result[2])
     
-    # (b)
-    mnist_train.plot_confusion_matrix(mnist_model)
-
-    # (c)
-    mnist_train.plot_image(mnist_train_result[3])
+    train_subset_size = 1000
+    mnist_train.xs = mnist_train.xs[:train_subset_size]
+    mnist_train.ys = mnist_train.ys[:train_subset_size]
+    
+    mnist_model = MultiLogisticRegressionModel(28**2, 10, learning_rate=1e-3)
+    mnist_train_result = mnist_model.train(mnist_train, mnist_test)
+    
+    mnist_train.compute_average_accuracy(mnist_model)
+    mnist_train.plot_accuracy_curve(mnist_train_result[0], mnist_train_result[1], title="Training Accuracy")
+    
+    mnist_test.compute_average_accuracy(mnist_model)
+    mnist_test.plot_accuracy_curve(mnist_train_result[0], mnist_train_result[2], title="Test Accuracy")
+    
+    mnist_test.plot_confusion_matrix(mnist_model)
+    
+    for digit in range(10):
+        mnist_test.plot_image(mnist_train_result[3][digit])
 
 
 def main():
