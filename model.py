@@ -412,11 +412,135 @@ def multi_classification():
     for digit in range(10):
         mnist_test.plot_image(mnist_train_result[3][digit])
 
+# PA4 Q7 EX
+class RidgeRegressionModel(Model):
+    """
+    Ridge regression model with polynomial features and L2 regularization.
+    x and y are real numbers. The goal is to fit y = hypothesis(x) while minimizing
+    both the squared error and the L2 norm of the weights.
+    
+    The objective function is:
+    J(w) = (1/2m) * sum((h(x) - y)^2) + (lambda/2) * sum(w_j^2)
+    where lambda is the regularization parameter controlling the strength of regularization
+    """
+
+    def __init__(self, degree = 1, learning_rate = 1e-3, lambda_reg = 0.1):
+        self.degree = degree
+        self.learning_rate = learning_rate
+        self.lambda_reg = lambda_reg
+        self.weights = [0.1 * random.random() for i in range(self.degree + 1)]
+ 
+    def get_features(self, x):
+        return [x**p for p in range(self.degree + 1)]
+
+    def get_weights(self):
+        return self.weights
+
+    def hypothesis(self, x):
+        features = self.get_features(x)
+        return sum(w * f for w, f in zip(self.weights, features))
+
+    def predict(self, x):
+        return self.hypothesis(x)
+
+    def loss(self, x, y):
+        mse_loss = (self.hypothesis(x) - y)**2
+
+        l2_loss = self.lambda_reg * sum(w**2 for w in self.weights[1:])
+        return mse_loss + l2_loss
+
+    def gradient(self, x, y):
+        featuresX = self.get_features(x)
+        pred_error = 2 * (self.hypothesis(x) - y)
+        
+        gradients = [pred_error * featuresX[0]]
+        
+        for i in range(1, self.degree + 1):
+            grad = pred_error * featuresX[i] + 2 * self.lambda_reg * self.weights[i]
+            gradients.append(grad)
+            
+        return gradients
+    
+    def train(self, dataset : util.Dataset, evalset = None):
+        nIterations = 2000
+        k = 0
+        eval_iters = []
+        losses = []
+        testLosses = []
+        alpha = self.learning_rate/(2 * dataset.get_size())
+        max_weight = 1e6
+
+        while k < nIterations:
+            randomSample = dataset.get_sample()
+
+            if k % 100 == 0:
+                eval_iters.append(k)
+                losses.append(dataset.compute_average_loss(self))
+                if evalset is not None:
+                    testLosses.append(evalset.compute_average_loss(self))
+
+            grads = self.gradient(randomSample[0], randomSample[1])
+            
+            for j in range(self.degree + 1):
+                self.weights[j] -= alpha * grads[j]
+                if self.weights[j] > max_weight:
+                    self.weights[j] = max_weight
+                elif self.weights[j] < -max_weight:
+                    self.weights[j] = -max_weight
+
+            k += 1
+        
+        return [eval_iters, losses, testLosses]
+
+def regularized_regression():
+
+    # Helpful functions:
+    # util.get_dataset, util.Dataset.compute_average_loss, util.RegressionDataset.plot_data
+    # util.RegressionDataset.plot_loss_curve
+
+    # (a)
+    sine_train = util.get_dataset("sine_train")
+    sine_test = util.get_dataset("sine_test")
+    sine_model = RidgeRegressionModel(1, 1e-4, 0.1)
+
+    sine_train_result = sine_model.train(sine_train, sine_test)
+
+    print('average loss of sine_train:', sine_train.compute_average_loss(sine_model))
+    sine_train.plot_data(sine_model)
+
+    # (b)
+    sine_train.plot_loss_curve(sine_train_result[0], sine_train_result[1])
+
+    # (c)
+    degrees = [1, 2]
+    learning_rates = [1e-3, 5e-4, 1e-4, 5e-5, 1e-5]
+    lambda_regs = [0.0, 0.01, 0.1, 1.0]
+
+    sine_val = util.get_dataset("sine_val")
+    results = []
+
+    for degree in degrees:
+        for lr in learning_rates:
+            for lam in lambda_regs:
+                model = RidgeRegressionModel(degree, lr, lam)
+                model.train(sine_train)
+
+                train_loss = sine_train.compute_average_loss(model)
+                val_loss = sine_val.compute_average_loss(model)
+
+                results.append((degree, lr, lam, train_loss, val_loss))
+            
+    best = min(results, key=lambda x: x[4])
+
+    print('best combination:', 
+          f"degree={best[0]}, lr={best[1]:.0e}, lambda={best[2]:.2e}, "
+          f"train_loss={best[3]:.4f}, val_loss={best[4]:.4f}")
 
 def main():
     linear_regression()
     binary_classification()
     multi_classification()
+    regularized_regression()
 
 if __name__ == "__main__":
     main()
