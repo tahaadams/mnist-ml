@@ -408,6 +408,25 @@ def multi_classification():
     for digit in range(10):
         mnist_test.plot_image(mnist_train_result[3][digit])
 
+    # PA4 Q9 EX
+
+    misclassified = []
+
+    for i in range(mnist_test.get_size()):
+        x = mnist_test.xs[i]
+        y = mnist_test.ys[i]
+
+        pred = mnist_model.predict(x)
+
+        if pred != y:
+            flat = [pixel for row in x for pixel in row]
+            misclassified.append(flat)
+            if len(misclassified) >= 10:
+                break
+    
+    for error in misclassified:
+        mnist_test.plot_image(error)
+
 # PA4 Q7 EX
 class RidgeRegressionModel(Model):
     """
