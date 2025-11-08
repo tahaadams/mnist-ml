@@ -51,12 +51,8 @@ class PolynomialRegressionModel(Model):
 
     def hypothesis(self, x):
         features = self.get_features(x)
-        sum = 0
 
-        for j in range(len(features)):
-            sum = sum + (self.weights[j] * features[j])
-
-        return sum
+        return sum(w * f for w, f in zip(self.weights, features))
 
     def predict(self, x):
         return self.hypothesis(x)
@@ -70,7 +66,7 @@ class PolynomialRegressionModel(Model):
         return [2 * (self.hypothesis(x) - y) * featuresX[i] for i in range(self.degree + 1)]
     
     def train(self, dataset : util.Dataset, evalset = None):
-        nIterations = 10000
+        nIterations = 2000
         k = 0
         eval_iters = []
         losses = []
@@ -122,7 +118,7 @@ def linear_regression():
     sine_train.plot_loss_curve(sine_train_result[0], sine_train_result[1])
 
     # (c)
-    degrees = [1, 2, 3, 4]
+    degrees = [1, 2]
     learning_rates = [1e-3, 5e-4, 1e-4, 5e-5, 1e-5]
 
     sine_val = util.get_dataset("sine_val")
@@ -536,11 +532,99 @@ def regularized_regression():
           f"degree={best[0]}, lr={best[1]:.0e}, lambda={best[2]:.2e}, "
           f"train_loss={best[3]:.4f}, val_loss={best[4]:.4f}")
 
+# PA4 Q8 EX
+
+class DatabaseLogisticRegressionModel(Model):
+    """
+    Binary logistic regression model for classifying 2D point data.
+    
+    Input:
+    - x: A list of two numbers [x1, x2] representing coordinates in 2D space
+    - y: Binary label (0 or 1) representing the class of the point
+    
+    The model learns a decision boundary in the 2D plane that separates
+    points labeled 0 from points labeled 1. It outputs P(y = 1 | x),
+    the probability that a point x belongs to class 1, and makes predictions
+    by thresholding this probability at 0.5.
+    """
+
+    def __init__(self, learning_rate = 1e-2):
+        self.learning_rate = learning_rate
+        self.weights = [0 for _ in range(3)]
+
+    def get_features(self, x):
+        return [1] + x
+
+    def get_weights(self):
+        return self.weights
+
+    def hypothesis(self, x):
+        features = self.get_features(x)
+        logit = sum(w * f for w, f in zip(self.weights, features))
+        return 1 / (1 + math.exp(-logit))
+
+    def predict(self, x):
+        if self.hypothesis(x) > 0.5:
+            return 1
+        else:
+            return 0
+
+    def loss(self, x, y):
+        h = self.hypothesis(x)
+        return (-1) * (y * math.log(h) + (1 - y) * math.log(1 - h))
+
+    def gradient(self, x, y):
+        featuresX = self.get_features(x)
+        pred_error = self.hypothesis(x) - y
+        return [pred_error * f for f in featuresX]
+
+    def train(self, dataset : util.Dataset, evalset : util.Dataset = None):
+        nIterations = 5000
+        k = 0
+        eval_iters = []
+        accuracies = []
+        testAccuracies = []
+        alpha = self.learning_rate
+        max_weight = 10.0
+
+        while k < nIterations:
+
+            randomSample = dataset.get_sample()
+
+            if k % 500 == 0:
+                eval_iters.append(k)
+                accuracies.append(dataset.compute_average_accuracy(self, 50))
+                if evalset is not None:
+                    testAccuracies.append(evalset.compute_average_accuracy(self, 50))
+
+            grads = self.gradient(randomSample[0], randomSample[1])
+            for j in range(3):
+                self.weights[j] -= alpha * grads[j]
+                self.weights[j] = max(min(self.weights[j], max_weight), -max_weight)
+
+            k += 1
+
+        return [eval_iters, accuracies, testAccuracies]
+
+def database_classification():
+    ex4q7i = util.get_dataset("ex4q7i")
+    ex4q7ii = util.get_dataset("ex4q7ii")
+    ex4q7iii = util.get_dataset("ex4q7iii")
+    ex4q7iv = util.get_dataset("ex4q7iv")
+    
+    for i, dataset in enumerate([ex4q7i, ex4q7ii, ex4q7iii, ex4q7iv], 1):
+        database_model = DatabaseLogisticRegressionModel(learning_rate=1e-2)
+        database_model.train(dataset)
+
+        acc = dataset.compute_average_accuracy(database_model)
+        print(f"dataset {i} accuracy after training: {acc:.4f}")
+
 def main():
     linear_regression()
     binary_classification()
     multi_classification()
     regularized_regression()
+    database_classification()
 
 if __name__ == "__main__":
     main()
