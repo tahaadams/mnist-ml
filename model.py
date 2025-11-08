@@ -138,6 +138,15 @@ def linear_regression():
 
     print('best combination:', f"degree={best[0]}, lr={best[1]:.0e}, train_loss={best[2]:.4f}, val_loss={best[3]:.4f}")
 
+    # (d)
+    sine_model_best = PolynomialRegressionModel(best[0], best[1])
+    sine_train_result_best = sine_model_best.train(sine_train, sine_test)
+
+    print('average loss of sine_train best combination:', sine_train.compute_average_loss(sine_model_best))
+    sine_train.plot_data(sine_model_best)
+
+    sine_train.plot_loss_curve(sine_train_result_best[0], sine_train_result_best[1])
+
 # PA4 Q3
 class BinaryLogisticRegressionModel(Model):
     """
